@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.util.Assert;
@@ -38,6 +39,9 @@ public class SmsProviderController {
 
     @Autowired
     private LocaleMessageSourceService msService;
+
+    @Autowired
+    private Environment environment;
 
     /**
      * 币种管理 修改币种信息手机验证码
@@ -76,7 +80,7 @@ public class SmsProviderController {
     }
 
     /**
-     * 后台登录  手机验证码
+     * 后台登录 手机验证码
      *
      * @param phone
      * @return
@@ -86,11 +90,15 @@ public class SmsProviderController {
         return sendCode(phone, SysConstant.ADMIN_LOGIN_PHONE_PREFIX);
     }
 
-
     private MessageResult sendCode(String phone, String prefix) {
         Assert.notNull(phone, msService.getMessage("NO_CELL_PHONE_NUMBER"));
         MessageResult result;
-        String randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
+        String randomCode="";
+        if (environment.acceptsProfiles("dev")) {
+             randomCode = "111111";
+        }else{
+             randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
+        }
         try {
             ValueOperations valueOperations = redisTemplate.opsForValue();
             String key = prefix + phone;
@@ -98,9 +106,14 @@ public class SmsProviderController {
             if (expire < 600 && expire > 540) {
                 return error(msService.getMessage("SEND_CODE_FAILURE_ONE"));
             }
+            if (environment.acceptsProfiles("dev")) {
+                logger.info("sms OTP:{}", randomCode);
+                valueOperations.set(key, randomCode, 10, TimeUnit.MINUTES);
+                return success(msService.getMessage("SEND_CODE_SUCCESS") + phone);
+            }
             result = smsProvider.sendVerifyMessage(phone, randomCode);
             if (result.getCode() == 0) {
-                logger.info("短信验证码:{}", randomCode);
+                logger.info("sms OTP:{}", randomCode);
                 valueOperations.set(key, randomCode, 10, TimeUnit.MINUTES);
                 return success(msService.getMessage("SEND_CODE_SUCCESS") + phone);
             }

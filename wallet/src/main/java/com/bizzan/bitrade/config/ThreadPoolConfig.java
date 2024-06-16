@@ -1,4 +1,4 @@
-package ai.turbochain.ipex.config;
+package com.bizzan.bitrade.config;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
