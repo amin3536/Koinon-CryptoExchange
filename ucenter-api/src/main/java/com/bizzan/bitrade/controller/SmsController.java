@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.util.Assert;
@@ -49,6 +50,9 @@ public class SmsController {
     @Value("${sms.sign}")
     private String smsSign;
 
+    @Autowired
+    private Environment environment;
+
     /**
      * 注册验证码发送
      *
@@ -69,9 +73,22 @@ public class SmsController {
                 return error(localeMessageSourceService.getMessage("FREQUENTLY_REQUEST"));
             }
         }
-        String randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
         MessageResult result;
+        String randomCode="";
+        if (environment.acceptsProfiles("dev")) {
+             randomCode = "111111";
+        }else{
+             randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
+        }
         String content = randomCode;
+        if (environment.acceptsProfiles("dev")) {
+            valueOperations.getOperations().delete(key);
+            valueOperations.getOperations().delete(key + "Time");
+            // 缓存验证码
+            valueOperations.set(key, randomCode, 10, TimeUnit.MINUTES);
+            valueOperations.set(key + "Time", new Date(), 10, TimeUnit.MINUTES);
+            return success(localeMessageSourceService.getMessage("SEND_SMS_SUCCESS"));
+        }
         if ("86".equals(country1.getAreaCode())) {
             Assert.isTrue(ValidateUtil.isMobilePhone(phone.trim()), localeMessageSourceService.getMessage("PHONE_EMPTY_OR_INCORRECT"));
             result = smsProvider.sendVerifyMessage(phone, content);
@@ -371,8 +388,21 @@ public class SmsController {
         Assert.hasText(member.getMobilePhone(), localeMessageSourceService.getMessage("NOT_BIND_PHONE"));
         MessageResult result;
         log.info("===API密钥验证码发送===mobile："+member.getMobilePhone());
-        String randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
+        String randomCode="";
+        if (environment.acceptsProfiles("dev")) {
+             randomCode = "111111";
+        }else{
+             randomCode = String.valueOf(GeneratorUtil.getRandomNumber(100000, 999999));
+        }
         String content = randomCode;
+        if (environment.acceptsProfiles("dev")) {
+            ValueOperations valueOperations = redisTemplate.opsForValue();
+            String key = SysConstant.API_BIND_CODE_PREFIX + member.getMobilePhone();
+            valueOperations.getOperations().delete(key);
+            // 缓存验证码
+            valueOperations.set(key, randomCode, 10, TimeUnit.MINUTES);
+            return success(localeMessageSourceService.getMessage("SEND_SMS_SUCCESS"));
+        }
         if ("86".equals(member.getCountry().getAreaCode())) {
             Assert.isTrue(ValidateUtil.isMobilePhone(member.getMobilePhone().trim()), localeMessageSourceService.getMessage("PHONE_EMPTY_OR_INCORRECT"));
             result = smsProvider.sendVerifyMessage(member.getMobilePhone(), content);
